@@ -83,30 +83,15 @@ async def index():
 
 @app.get("/api/status")
 async def status():
-    with_db = __import__("sqlite3").connect(m.DB_PATH)
-    try:
-        total = with_db.execute("SELECT COUNT(*) FROM push_records WHERE status IN ('success','partial')").fetchone()[0]
-        today = m.datetime.now(m.BJT).strftime("%Y-%m-%d")
-        today_n = with_db.execute(
-            "SELECT COUNT(*) FROM push_records WHERE status IN ('success','partial') AND pushed_at LIKE ?",
-            (today + "%",)).fetchone()[0]
-        reset = with_db.execute(
-            "SELECT COUNT(*) FROM push_records WHERE tag != '' AND status IN ('success','partial')").fetchone()[0]
-        intel_today = with_db.execute(
-            "SELECT COUNT(*) FROM push_records WHERE source = 'intel_search' "
-            "AND status IN ('success','partial') AND pushed_at LIKE ?",
-            (today + "%",)).fetchone()[0]
-        recent = with_db.execute(
-            "SELECT pushed_at, status FROM push_records ORDER BY id DESC LIMIT 1").fetchone()
-    finally:
-        with_db.close()
+    stats = m.store.get().stats()
     cfg = m.load_config()
     state = m.load_state()
     return {
         "running": m.MONITOR_STATE["running"],
         "last_check": m.MONITOR_STATE["last_check"],
         "last_error": m.MONITOR_STATE["last_error"],
-        "stats": {"total": total, "today": today_n, "reset": reset, "intel_today": intel_today,
+        "stats": {"total": stats["total"], "today": stats["today"],
+                  "reset": stats["reset"], "intel_today": stats["intel_today"],
                   "monitors": len(cfg.get("twitter", {}).get("monitor") or [])},
         "display_names": state.get("display_names", {}),
         "intel": m.MONITOR_STATE.get("intel") or {},
@@ -118,23 +103,10 @@ async def status():
 @app.get("/api/records")
 async def records(limit: int = 100, source: str = ""):
     limit = max(1, min(limit, 500))
-    q = "SELECT * FROM push_records"
-    params: list = []
-    if source.strip():
-        # source=intel 同时匹配 intel_search / intel_digest；source=monitor 只看主监控
-        q += " WHERE source LIKE ?"
-        params.append(source.strip() + "%")
-    q += " ORDER BY id DESC LIMIT ?"
-    params.append(limit)
-    with_db = __import__("sqlite3").connect(m.DB_PATH)
-    with_db.row_factory = __import__("sqlite3").Row
-    try:
-        rows = with_db.execute(q, params).fetchall()
-    finally:
-        with_db.close()
+    # source=intel 同时匹配 intel_search / intel_digest；source=monitor 只看主监控
+    rows = m.store.get().records(limit, source.strip())
     out = []
-    for r in rows:
-        d = dict(r)
+    for d in rows:
         d["time_conv"] = json.loads(d["time_conv"] or "[]")
         d["channels"] = json.loads(d["channels"] or "{}")
         out.append(d)
@@ -143,12 +115,7 @@ async def records(limit: int = 100, source: str = ""):
 
 @app.post("/api/records/clear")
 async def records_clear():
-    with_db = __import__("sqlite3").connect(m.DB_PATH)
-    try:
-        with_db.execute("DELETE FROM push_records")
-        with_db.commit()
-    finally:
-        with_db.close()
+    m.store.get().clear()
     return {"ok": True}
 
 

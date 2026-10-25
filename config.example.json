@@ -33,6 +33,14 @@
     "port": 8787,
     "password": ""
   },
+  "database": {
+    "backend": "",
+    "host": "127.0.0.1",
+    "port": 3306,
+    "user": "",
+    "password": "",
+    "name": ""
+  },
   "poll_interval_seconds": 90,
   "proxy": "http://127.0.0.1:12450",
   "keywords": [],

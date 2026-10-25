@@ -32,6 +32,7 @@ from twikit import Client
 from twikit.errors import TooManyRequests, Unauthorized, NotFound
 
 import xclient  # X 接口适配层：导入即打齐 twikit 兼容补丁
+import store    # 存储层：push_records 的 SQLite/MySQL/PostgreSQL 多后端
 
 
 
@@ -49,60 +50,22 @@ DB_PATH = BASE_DIR / "records.db"
 
 
 def init_db() -> None:
-    with sqlite3.connect(DB_PATH) as conn:
-        # WAL：面板读与监控写并发时不再互相阻塞（模式持久化在库文件里）
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute(
-            """CREATE TABLE IF NOT EXISTS push_records (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            tweet_id TEXT UNIQUE,
-            handle TEXT,
-            display TEXT,
-            tag TEXT,
-            text TEXT,
-            translation TEXT,
-            time_conv TEXT,
-            url TEXT,
-            tweet_created TEXT,
-            pushed_at TEXT,
-            channels TEXT,
-            status TEXT
-        )"""
-        )
-        # 旧库迁移：source 区分记录来自主监控(monitor)还是免费情报(intel_search/intel_digest)
-        cols = [r[1] for r in conn.execute("PRAGMA table_info(push_records)")]
-        if "source" not in cols:
-            conn.execute(
-                "ALTER TABLE push_records ADD COLUMN source TEXT NOT NULL DEFAULT 'monitor'")
+    """按 config.json 的 database 段初始化存储（SQLite / MySQL / PostgreSQL，默认 SQLite）。"""
+    store.init(load_config(), DB_PATH)
 
 
 def record_push(handle, display, status, text="", tag="", tweet_id="", url="",
                 tweet_created="", translation="", time_conv=None, results=None,
                 source="monitor") -> None:
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            "INSERT OR REPLACE INTO push_records "
-            "(tweet_id, handle, display, tag, text, translation, time_conv, url, tweet_created, pushed_at, channels, status, source) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                str(tweet_id), handle, display or f"@{handle}", tag,
-                text, translation or "",
-                json.dumps(time_conv or [], ensure_ascii=False),
-                url, tweet_created,
-                datetime.now(BJT).strftime("%Y-%m-%d %H:%M:%S"),
-                json.dumps(results or {}, ensure_ascii=False),
-                status, source,
-            ),
-        )
+    store.get().push_record(handle, display, status, text=text, tag=tag,
+                            tweet_id=tweet_id, url=url, tweet_created=tweet_created,
+                            translation=translation, time_conv=time_conv,
+                            results=results, source=source)
 
 
 def tweet_seen(tweet_id) -> bool:
     """该推文是否已入库（任意管线），用于跨管线去重。"""
-    with sqlite3.connect(DB_PATH) as conn:
-        return conn.execute(
-            "SELECT 1 FROM push_records WHERE tweet_id = ? LIMIT 1",
-            (str(tweet_id),),
-        ).fetchone() is not None
+    return store.get().tweet_seen(tweet_id)
 
 
 # 面板/CLI 共用的运行状态与互斥锁（防止循环轮询和手动检查同时跑导致重复推送）
@@ -972,22 +935,12 @@ def intel_digest_window(state: dict) -> str:
 
 def intel_rows_since(since: str) -> list[dict]:
     """日报收录范围：时间窗内的情报 + 全部未覆盖的基准行（首轮历史情报只有日报这条送达路径）。"""
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            "SELECT * FROM push_records WHERE source = 'intel_search' AND ("
-            "(pushed_at >= ? AND status IN ('success', 'partial', 'failed')) "
-            "OR status = 'baseline') "
-            "ORDER BY pushed_at ASC, id ASC", (since,)).fetchall()
-    return [dict(r) for r in rows]
+    return store.get().intel_rows_since(since)
 
 
 def mark_baselines_covered() -> None:
     """日报送达后，把基准行标记为已覆盖，避免后续日报重复带上它们。"""
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            "UPDATE push_records SET status = 'covered' "
-            "WHERE source = 'intel_search' AND status = 'baseline'")
+    store.get().mark_baselines_covered()
 
 
 def format_digest_bodies(rows: list[dict], signature: str = "Twitter monitoring") -> tuple[str, str, str, str]:

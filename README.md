@@ -177,12 +177,15 @@ docker compose down               # 停止
 | `intel.queries` | 全网搜索语句列表，每行一条，支持 X 搜索语法，留空用默认（见上节） |
 | `intel.search_interval_minutes` | 搜索间隔（分钟），默认 10，最低 5 |
 | `intel.digest_time` | 每天日报发送时间（北京时间 HH:MM），默认 09:00 |
+| `database.backend` | 存储后端：留空 = SQLite（默认，零配置）；可选 `mysql` / `postgres` |
+| `database.host/port/user/password/name` | 远程数据库连接信息（端口 MySQL 3306 / PG 5432）；**数据库需提前创建好，表会自动建**；切换后历史记录从新后端重新积累；修改后重启生效 |
 
 ## 四、文件说明
 
 - `app.py` Web 面板 + 监控循环（推荐入口）
 - `monitor.py` 核心逻辑 / 命令行入口
 - `xclient.py` X 接口适配层（twikit 补丁、事务 ID 生成、搜索 queryId 自愈都在这里，X 改版优先改它）
+- `store.py` 存储层（push_records 的 SQLite / MySQL / PostgreSQL 多后端实现）
 - `static/index.html` 面板页面
 - `records.db` 推送记录数据库（SQLite）
 - `config.json` 配置（**含账号凭据，不要外传/提交到 git**）

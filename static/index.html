@@ -355,6 +355,52 @@
               </el-card>
             </el-col>
 
+            <el-col :xs="24" :md="12" style="margin-bottom:14px">
+              <el-card shadow="never">
+                <template #header><span class="card-title">🗄️ 数据库（留空 = 默认 SQLite）</span></template>
+                <el-form label-position="top">
+                  <el-row :gutter="12">
+                    <el-col :span="10">
+                      <el-form-item label="类型">
+                        <el-select v-model="cfg.database.backend" placeholder="SQLite（默认）" clearable style="width:100%">
+                          <el-option label="SQLite（默认）" value="" />
+                          <el-option label="MySQL" value="mysql" />
+                          <el-option label="PostgreSQL" value="postgres" />
+                        </el-select>
+                      </el-form-item>
+                    </el-col>
+                    <el-col :span="14">
+                      <el-form-item label="地址 host">
+                        <el-input v-model="cfg.database.host" placeholder="127.0.0.1" :disabled="!cfg.database.backend" />
+                      </el-form-item>
+                    </el-col>
+                  </el-row>
+                  <el-row :gutter="12">
+                    <el-col :span="8">
+                      <el-form-item label="端口（MySQL 3306 / PG 5432）">
+                        <el-input-number v-model="cfg.database.port" :min="1" :max="65535" :controls="false"
+                                         :disabled="!cfg.database.backend" style="width:100%" />
+                      </el-form-item>
+                    </el-col>
+                    <el-col :span="8">
+                      <el-form-item label="用户名">
+                        <el-input v-model="cfg.database.user" :disabled="!cfg.database.backend" />
+                      </el-form-item>
+                    </el-col>
+                    <el-col :span="8">
+                      <el-form-item label="密码">
+                        <el-input v-model="cfg.database.password" type="password" show-password :disabled="!cfg.database.backend" />
+                      </el-form-item>
+                    </el-col>
+                  </el-row>
+                  <el-form-item label="数据库名（需提前创建好，表会自动建）">
+                    <el-input v-model="cfg.database.name" :disabled="!cfg.database.backend" placeholder="twitter_monitoring" />
+                  </el-form-item>
+                  <div class="row-hint">MySQL / PostgreSQL 二选一；切换后历史记录从新后端重新积累（不做旧数据迁移）；修改后重启程序生效。</div>
+                </el-form>
+              </el-card>
+            </el-col>
+
             <el-col :xs="24" style="margin-bottom:14px">
               <el-card shadow="never">
                 <template #header><span class="card-title">🖥️ 面板</span></template>
@@ -424,6 +470,7 @@ createApp({
     const cfg = reactive({
       twitter: {}, telegram: {}, email: {}, serverchan: {}, panel: {},
       intel: {enabled: true, search_interval_minutes: 10, digest_time: '09:00'},
+      database: {backend: '', host: '', port: 0, user: '', password: '', name: ''},
       poll_interval_seconds: 90, proxy: '', monitor_txt: '', keywords_txt: '',
       intel_queries_txt: '', accounts_txt: ''
     });
@@ -508,6 +555,7 @@ createApp({
         cfg.accounts_txt = accLines.join('\n');
         cfg.intel = Object.assign({enabled: true, search_interval_minutes: 10, digest_time: '09:00'}, c.intel || {});
         cfg.intel_queries_txt = (c.intel?.queries || []).join('\n');
+        cfg.database = Object.assign({backend: '', host: '', port: 0, user: '', password: '', name: ''}, c.database || {});
         cfgWarn.value = '';
       } catch (e) { ElMessage.error('加载配置失败: ' + e.message); }
     }
@@ -515,7 +563,7 @@ createApp({
     async function saveConfig() {
       const c = JSON.parse(JSON.stringify({
         twitter: cfg.twitter, telegram: cfg.telegram, email: cfg.email,
-        serverchan: cfg.serverchan, panel: cfg.panel,
+        serverchan: cfg.serverchan, panel: cfg.panel, database: cfg.database,
         poll_interval_seconds: cfg.poll_interval_seconds, proxy: cfg.proxy,
         keywords: [], monitor: []
       }));

@@ -132,4 +132,53 @@ from twikit.client.gql import Endpoint
 assert xclient.SEARCH_QID in Endpoint.SEARCH_TIMELINE
 assert Endpoint.SEARCH_TIMELINE.startswith("https://x.com/i/api/graphql/")
 
+# 14) 存储层：配置解析 + SQLite 全流程
+import store as store_mod
+
+d = store_mod._db_cfg({})
+assert d["backend"] == "sqlite"
+assert store_mod._db_cfg({"database": {"backend": "PG", "host": "h", "name": "n"}})["backend"] == "postgres"
+assert store_mod._db_cfg({"database": {"backend": "mysql", "host": "h", "name": "n", "port": "3307"}})["port"] == 3307
+try:
+    store_mod._db_cfg({"database": {"backend": "oracle"}})
+    assert False, "未知 backend 应报错"
+except RuntimeError:
+    pass
+try:
+    store_mod.Store({"database": {"backend": "mysql"}}, tmp / "must_fail.db")
+    assert False, "mysql 缺 host/name 应报错"
+except RuntimeError:
+    pass
+
+spath = tmp / "store.db"
+s = store_mod.Store({}, spath)
+s.init()
+s.push_record("u1", None, status="success", text="t1", tweet_id="T1",
+              url="u", source="intel_search")
+s.push_record("u1", None, status="success", text="t1-new", tweet_id="T1",
+              url="u", source="intel_search")  # 同 tweet_id 幂等覆盖
+assert s.tweet_seen("T1") and not s.tweet_seen("T2")
+rows = s.records(10)
+assert len(rows) == 1 and rows[0]["text"] == "t1-new" and rows[0]["display"] == "@u1"
+s.push_record("b", "Bee", status="baseline", text="base", tweet_id="T2",
+              url="", source="intel_search")
+assert [r["tweet_id"] for r in s.intel_rows_since("2999-01-01")] == ["T2"]  # 窗口外仅 baseline
+s.mark_baselines_covered()
+assert s.intel_rows_since("2999-01-01") == []          # baseline 已覆盖，窗口外无收录
+assert [r["tweet_id"] for r in s.intel_rows_since("2000-01-01")] == ["T1"]  # 仅剩 success 行
+s.push_record("m", "M", status="success", text="m", tweet_id="T3",
+              url="", source="monitor")
+stt = s.stats()
+assert stt["total"] == 2 and stt["today"] == 2 and stt["intel_today"] == 1, stt
+assert {r["tweet_id"] for r in s.records(10, "intel")} == {"T1", "T2"}
+assert {r["tweet_id"] for r in s.records(10, "monitor")} == {"T3"}
+s.clear()
+assert s.records(10) == []
+
+# 15) monitor 委托层走存储（含旧库迁移）
+m.init_db()
+m.record_push("dele", None, status="success", text="via-delegate",
+              tweet_id="D1", url="", source="monitor")
+assert m.tweet_seen("D1")
+
 print("ALL CORE TESTS PASSED")
