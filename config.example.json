@@ -34,6 +34,7 @@
     "password": ""
   },
   "database": {
+    "_说明": "backend 留空 = 默认 SQLite（零配置）。要切换填 mysql 或 postgres 并补全连接信息（数据库需提前创建好；使用前先装驱动 pip install PyMySQL 或 psycopg2-binary，也可取消 requirements.txt 里的注释）。修改后重启生效",
     "backend": "",
     "host": "127.0.0.1",
     "port": 3306,

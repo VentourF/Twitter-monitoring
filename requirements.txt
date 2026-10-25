@@ -4,5 +4,9 @@ httpx>=0.27
 tzdata>=2024.1
 fastapi>=0.110
 uvicorn[standard]>=0.29
-PyMySQL>=1.1
-psycopg2-binary>=2.9
+
+# ---- 可选数据库驱动（默认 SQLite，无需安装）----
+# 使用 MySQL 时取消下一行注释（或 pip install PyMySQL）
+# PyMySQL>=1.1
+# 使用 PostgreSQL 时取消下一行注释（或 pip install psycopg2-binary）
+# psycopg2-binary>=2.9
