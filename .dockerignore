@@ -1,0 +1,11 @@
+.venv
+__pycache__
+*.pyc
+.git
+tweets_dump.json
+config.json
+state.json
+cookies.json
+records.db
+monitor.log
+start.bat

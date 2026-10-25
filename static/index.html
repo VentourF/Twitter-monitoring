@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Twitter monitoring 控制面板</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%231d9bf0'/%3E%3Cstop offset='1' stop-color='%237c4dff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='24' height='24' rx='6' fill='url(%23g)'/%3E%3Cg fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='1.9' fill='%23fff' stroke='none'/%3E%3Cpath d='M12 4.2A7.8 7.8 0 1 1 6.5 6.5'/%3E%3Cpath d='M12 8.2A3.8 3.8 0 1 1 9.3 9.3' opacity='.55'/%3E%3Cpath d='M12 12L5.9 5.9' stroke-width='2'/%3E%3C/g%3E%3Ccircle cx='17' cy='6.8' r='1.3' fill='%234ade80'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/vendor/element-plus.css">
+<style>
+  [v-cloak] { display: none; }
+  body {
+    margin: 0; min-height: 100vh; background: #f5f7fa;
+  }
+  .page { max-width: 1160px; margin: 0 auto; padding: 20px 18px 70px; }
+  .header {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    background: #fff; border: 1px solid #e4e9f0; border-radius: 12px;
+    padding: 13px 18px; margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(16, 42, 83, .06);
+  }
+  .logo {
+    width: 38px; height: 38px; border-radius: 11px;
+    background: linear-gradient(135deg, #1d9bf0, #7c4dff);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 3px 10px rgba(29,155,240,.30);
+  }
+  .header h1 { font-size: 18px; margin: 0; letter-spacing: .3px; color: #1f2d3d; }
+  .meta { color: var(--el-text-color-secondary); font-size: 12px; }
+  .header-btns { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 16px; }
+  .stat-card { border-radius: 12px; }
+  .stat-card .num { font-size: 28px; font-weight: 700; line-height: 1.2; }
+  .stat-card .lbl { color: var(--el-text-color-secondary); font-size: 12px; margin-top: 2px; }
+  .snippet { display: inline-block; max-width: 520px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; vertical-align: bottom; color: var(--el-text-color-regular); }
+  .detail { line-height: 1.8; font-size: 13px; padding: 2px 18px 16px 58px; background: #fafbfd; border-radius: 8px; }
+  .detail .tr { color: #2563eb; margin-top: 8px; }
+  .detail .cv { color: #0284c7; margin-top: 4px; }
+  .logbox { background: #1e2430; border-radius: 10px;
+    padding: 14px; font: 12px/1.6 Consolas, monospace; max-height: 520px; overflow: auto;
+    white-space: pre-wrap; word-break: break-all; margin: 0; color: #c3d0dc; }
+  .card-title { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+
+  /* ---- 表单内部抛光 ---- */
+  .el-card { border-radius: 12px; }
+  .el-card__header { padding: 12px 16px; border-bottom: 1px solid var(--el-border-color-lighter); }
+  .el-card__body { padding: 16px; }
+  .el-form-item { margin-bottom: 15px; }
+  .el-form-item:last-child { margin-bottom: 2px; }
+  .el-form-item__label { font-size: 12px; color: var(--el-text-color-secondary); padding-bottom: 4px !important; line-height: 1.4; }
+  .el-input__wrapper, .el-textarea__inner {
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 0 0 1px var(--el-border-color) inset;
+    transition: box-shadow .18s ease, background .18s ease;
+  }
+  .el-textarea__inner { padding: 8px 10px; }
+  .el-input__wrapper:hover, .el-textarea__inner:hover { box-shadow: 0 0 0 1px #b8c4d4 inset; }
+  .el-input__wrapper.is-focus, .el-textarea__inner:focus {
+    box-shadow: 0 0 0 1px var(--el-color-primary) inset, 0 0 0 3px rgba(29,155,240,.12);
+  }
+  .el-input-number { width: 100%; }
+  .el-input-number .el-input__inner { text-align: left; }
+  .el-input__inner::placeholder, .el-textarea__inner::placeholder { color: #a8b3c1; }
+  .row-hint { color: var(--el-text-color-secondary); font-size: 12px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <div class="page">
+
+    <!-- 顶部：标题 + 状态 + 操作 -->
+    <div class="header">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff"
+             stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="1.9" fill="#fff" stroke="none"></circle>
+          <path d="M12 4.2A7.8 7.8 0 1 1 6.5 6.5"></path>
+          <path d="M12 8.2A3.8 3.8 0 1 1 9.3 9.3" opacity=".55"></path>
+          <path d="M12 12L5.9 5.9" stroke-width="2"></path>
+          <circle cx="17" cy="6.8" r="1.3" fill="#4ade80" stroke="none"></circle>
+        </svg>
+      </div>
+      <h1>Twitter monitoring</h1>
+      <span class="meta">盯 X 推文 · 扫全网免费模型情报 · 每日日报</span>
+      <el-tag :type="st.running ? 'success' : 'danger'" effect="dark" round>
+        {{ st.running ? '● 运行中' : '■ 已停止' }}
+      </el-tag>
+      <el-tag v-if="st.health?.main && st.health.main.ok !== null"
+              :type="st.health.main.ok ? 'success' : 'danger'" effect="plain" round>
+        {{ st.health.main.ok ? '接口正常' : '接口异常' }}
+      </el-tag>
+      <el-tag v-if="st.health?.intel && st.health.intel.ok !== null"
+              :type="st.health.intel.ok ? 'success' : 'danger'" effect="plain" round>
+        {{ st.health.intel.ok ? '搜索正常' : '搜索异常' }}
+      </el-tag>
+      <span class="meta" v-if="st.last_check">上次检查 {{ st.last_check }}</span>
+      <div class="header-btns">
+        <el-button type="primary" :loading="checking" @click="doCheck">立即检查</el-button>
+        <el-button @click="doTest">测试推送渠道</el-button>
+        <el-button :type="st.running ? 'danger' : 'success'" plain @click="toggleMonitor">
+          {{ st.running ? '停止监控' : '启动监控' }}
+        </el-button>
+      </div>
+    </div>
+    <el-alert v-if="st.last_error" type="error" :title="st.last_error" :closable="false" style="margin-bottom:14px"></el-alert>
+
+    <!-- 统计卡片 -->
+    <div class="cards">
+      <el-card class="stat-card" shadow="hover">
+        <div class="num" style="color:#1d9bf0">{{ st.stats?.today ?? '-' }}</div><div class="lbl">今日推送</div>
+      </el-card>
+      <el-card class="stat-card" shadow="hover">
+        <div class="num">{{ st.stats?.total ?? '-' }}</div><div class="lbl">累计推送</div>
+      </el-card>
+      <el-card class="stat-card" shadow="hover">
+        <div class="num" style="color:#f39c12">{{ st.stats?.reset ?? '-' }}</div><div class="lbl">疑似重置</div>
+      </el-card>
+      <el-card class="stat-card" shadow="hover">
+        <div class="num" style="color:#d97706">{{ st.stats?.intel_today ?? '-' }}</div><div class="lbl">今日情报</div>
+      </el-card>
+      <el-card class="stat-card" shadow="hover">
+        <div class="num" style="color:#16a34a">{{ st.stats?.monitors ?? '-' }}</div><div class="lbl">监控对象</div>
+      </el-card>
+    </div>
+
+    <!-- 主体 Tabs -->
+    <el-card shadow="never" :body-style="{padding:'14px 16px'}">
+      <el-tabs v-model="tab" @tab-change="onTab">
+
+        <!-- 推送记录 -->
+        <el-tab-pane label="推送记录" name="records">
+          <el-table :data="records" style="width:100%" size="default"
+                    :header-cell-style="{background:'transparent'}">
+            <el-table-column type="expand">
+              <template #default="scope">
+                <div class="detail">
+                  <div>{{ scope.row.text }}</div>
+                  <div class="tr" v-if="scope.row.translation">🌐 {{ scope.row.translation }}</div>
+                  <div class="cv" v-for="cv in (scope.row.time_conv || [])" :key="cv">⏰ {{ cv }}</div>
+                  <div style="margin-top:8px">
+                    <el-link :href="scope.row.url" target="_blank" type="primary">{{ scope.row.url }}</el-link>
+                  </div>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column prop="pushed_at" label="推送时间" width="145"></el-table-column>
+            <el-table-column prop="display" label="账号" width="180" show-overflow-tooltip></el-table-column>
+            <el-table-column label="内容" min-width="300">
+              <template #default="scope">
+                <el-tag v-if="scope.row.tag" type="warning" size="small" effect="plain" style="margin-right:6px">疑似重置</el-tag>
+                <span class="snippet">{{ (scope.row.text || '').slice(0, 90) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="108">
+              <template #default="scope">
+                <el-tag :type="statusType(scope.row.status)" size="small">{{ statusCn(scope.row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="渠道" width="105">
+              <template #default="scope">
+                <div v-for="(v, k) in (scope.row.channels || {})" :key="k" style="font-size:12px">
+                  {{ chCn(k) }} <span :style="{color: v ? '#16a34a' : '#dc2626'}">{{ v ? '✓' : '✗' }}</span>
+                </div>
+                <span v-if="!Object.keys(scope.row.channels || {}).length" class="meta">—</span>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div style="margin-top:12px; display:flex; gap:12px; align-items:center">
+            <el-button size="small" type="danger" plain @click="clearRecords">清空记录</el-button>
+            <span class="meta">每 30 秒自动刷新 · 点击行首箭头展开全文/翻译/时间换算</span>
+          </div>
+        </el-tab-pane>
+
+        <!-- 免费情报 -->
+        <el-tab-pane label="免费情报" name="intel" lazy>
+          <div style="margin-bottom:12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+            <el-button type="primary" size="small" :loading="intelBusy === 'search'" @click="doIntelSearch">🔍 立即搜索一轮</el-button>
+            <el-button size="small" :loading="intelBusy === 'digest'" @click="doIntelDigest">📨 立即生成日报</el-button>
+            <span class="meta">
+              上次搜索 {{ st.intel?.last_search || '—' }} · 上次日报 {{ st.intel?.last_digest || '—' }} · 每 30 秒自动刷新 · 搜索语句在「配置」页修改
+            </span>
+          </div>
+          <el-table :data="intel" style="width:100%" size="default"
+                    :header-cell-style="{background:'transparent'}">
+            <el-table-column type="expand">
+              <template #default="scope">
+                <div class="detail" style="padding-left:18px">
+                  <div>{{ scope.row.text }}</div>
+                  <div class="tr" v-if="scope.row.translation">🌐 {{ scope.row.translation }}</div>
+                  <div class="cv" v-for="cv in (scope.row.time_conv || [])" :key="cv">⏰ {{ cv }}</div>
+                  <div style="margin-top:8px">
+                    <el-link :href="scope.row.url" target="_blank" type="primary">{{ scope.row.url }}</el-link>
+                  </div>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column prop="pushed_at" label="时间" width="145"></el-table-column>
+            <el-table-column prop="display" label="来源" width="180" show-overflow-tooltip></el-table-column>
+            <el-table-column label="内容" min-width="300">
+              <template #default="scope">
+                <el-tag v-if="scope.row.tag" type="warning" size="small" effect="plain" style="margin-right:6px">免费情报</el-tag>
+                <el-tag v-if="scope.row.status === 'baseline'" type="info" size="small" effect="plain" style="margin-right:6px">基准</el-tag>
+                <span class="snippet">{{ (scope.row.text || '').slice(0, 90) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="108">
+              <template #default="scope">
+                <el-tag :type="statusType(scope.row.status)" size="small">{{ statusCn(scope.row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="渠道" width="105">
+              <template #default="scope">
+                <div v-for="(v, k) in (scope.row.channels || {})" :key="k" style="font-size:12px">
+                  {{ chCn(k) }} <span :style="{color: v ? '#16a34a' : '#dc2626'}">{{ v ? '✓' : '✗' }}</span>
+                </div>
+                <span v-if="!Object.keys(scope.row.channels || {}).length" class="meta">—</span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
+        <!-- 配置 -->
+        <el-tab-pane label="配置" name="config" lazy>
+          <el-row :gutter="14">
+            <el-col :xs="24" :md="12" style="margin-bottom:14px">
+              <el-card shadow="never">
+                <template #header><span class="card-title">📡 监控</span></template>
+                <el-form label-position="top">
+                  <el-form-item label="监控对象（每行一个用户名，不带 @）">
+                    <el-input v-model="cfg.monitor_txt" type="textarea" :rows="2" placeholder="thsottiaux" />
+                  </el-form-item>
+                  <el-form-item label="轮询间隔（秒，建议 ≥ 60，太频繁会触发 X 限流）">
+                    <el-input-number v-model="cfg.poll_interval_seconds" :min="30" :max="3600" :step="10"></el-input-number>
+                  </el-form-item>
+                  <el-form-item label="关键词过滤（每行一个；re: 开头 = 正则；留空 = 全部推送）">
+                    <el-input v-model="cfg.keywords_txt" type="textarea" :rows="3"
+                              placeholder="re:\breset\b" />
+                  </el-form-item>
+                  <el-form-item label="代理地址（访问 X 与翻译必需）">
+                    <el-input v-model="cfg.proxy" placeholder="http://127.0.0.1:12450" />
+                  </el-form-item>
+                </el-form>
+              </el-card>
+            </el-col>
+
+            <el-col :xs="24" :md="12" style="margin-bottom:14px">
+              <el-card shadow="never">
+                <template #header><span class="card-title">🎁 免费情报（X 全网搜索）</span></template>
+                <el-form label-position="top">
+                  <el-form-item label="启用">
+                    <el-switch v-model="cfg.intel.enabled" />
+                    <span class="meta" style="margin-left:10px">按间隔全网搜索，发现即推，每天再发一条日报</span>
+                  </el-form-item>
+                  <el-form-item label="搜索语句（每行一条，支持 X 搜索语法：lang: min_faves: -filter: since: 等；留空用默认）">
+                    <el-input v-model="cfg.intel_queries_txt" type="textarea" :rows="4"
+                              placeholder='("free model" OR "free credits") lang:en min_faves:5 -filter:replies' />
+                  </el-form-item>
+                  <el-row :gutter="12">
+                    <el-col :span="12">
+                      <el-form-item label="搜索间隔（分钟，最低 5，太频繁易限流）">
+                        <el-input-number v-model="cfg.intel.search_interval_minutes" :min="5" :max="720" :step="5" />
+                      </el-form-item>
+                    </el-col>
+                    <el-col :span="12">
+                      <el-form-item label="每天日报时间（北京时间）">
+                        <el-input v-model="cfg.intel.digest_time" placeholder="09:00" />
+                      </el-form-item>
+                    </el-col>
+                  </el-row>
+                  <div class="row-hint">首轮搜索只建基准不推送（避免历史推文刷屏），第二天的日报会把基准也汇总给你。</div>
+                </el-form>
+              </el-card>
+            </el-col>
+
+            <el-col :xs="24" :md="12" style="margin-bottom:14px">
+              <el-card shadow="never">
+                <template #header><span class="card-title">🔑 X 账号认证（支持多账号轮换）</span></template>
+                <el-form label-position="top">
+                  <el-form-item label="X 账号 cookie（每行一个：auth_token:ct0:备注；限流/失效自动轮换）">
+                    <el-input v-model="cfg.accounts_txt" type="textarea" :rows="3"
+                              placeholder="浏览器 F12 → Cookies → x.com 里复制，例如：&#10;6e36cfb1...:a920cce5...:小号1" />
+                  </el-form-item>
+                  <el-row :gutter="12">
+                    <el-col :span="12">
+                      <el-form-item label="用户名（备选：密码登录）">
+                        <el-input v-model="cfg.twitter.username" placeholder="仅密码登录时填" />
+                      </el-form-item>
+                    </el-col>
+                    <el-col :span="12">
+                      <el-form-item label="密码">
+                        <el-input v-model="cfg.twitter.password" type="password" show-password />
+                      </el-form-item>
+                    </el-col>
+                  </el-row>
+                  <div class="row-hint">推荐只填 cookie 行（可多行）；某个账号被限流/失效会自动换下一个。改动后下一轮轮询生效。</div>
+                </el-form>
+              </el-card>
+            </el-col>
+
+            <el-col :xs="24" :md="12" style="margin-bottom:14px">
+              <el-card shadow="never">
+                <template #header><span class="card-title">✉️ 邮箱推送（QQ/163 用授权码）</span></template>
+                <el-form label-position="top">
+                  <el-row :gutter="12">
+                    <el-col :span="16">
+                      <el-form-item label="SMTP 服务器">
+                        <el-input v-model="cfg.email.smtp_host" placeholder="smtp.qq.com" />
+                      </el-form-item>
+                    </el-col>
+                    <el-col :span="8">
+                      <el-form-item label="端口">
+                        <el-input-number v-model="cfg.email.smtp_port" :min="1" :max="65535" :controls="false" />
+                      </el-form-item>
+                    </el-col>
+                  </el-row>
+                  <el-row :gutter="12">
+                    <el-col :span="12">
+                      <el-form-item label="邮箱账号">
+                        <el-input v-model="cfg.email.username" placeholder="xxx@qq.com" />
+                      </el-form-item>
+                    </el-col>
+                    <el-col :span="12">
+                      <el-form-item label="授权码 / 密码">
+                        <el-input v-model="cfg.email.password" type="password" show-password
+                                  placeholder="QQ/163 为 16 位授权码" />
+                      </el-form-item>
+                    </el-col>
+                  </el-row>
+                  <el-form-item label="发件人名称（收件箱里显示的名字）">
+                    <el-input v-model="cfg.email.from_name" placeholder="Twitter monitoring" />
+                  </el-form-item>
+                  <el-form-item label="收件人（留空发给自己）">
+                    <el-input v-model="cfg.email.to" placeholder="不填 = 发给上面的邮箱账号" />
+                  </el-form-item>
+                </el-form>
+              </el-card>
+            </el-col>
+
+            <el-col :xs="24" :md="12" style="margin-bottom:14px">
+              <el-card shadow="never">
+                <template #header><span class="card-title">💬 其他推送渠道（可选，可叠加）</span></template>
+                <el-form label-position="top">
+                  <el-form-item label="Telegram bot_token">
+                    <el-input v-model="cfg.telegram.bot_token" type="password" show-password />
+                  </el-form-item>
+                  <el-form-item label="Telegram chat_id">
+                    <el-input v-model="cfg.telegram.chat_id" />
+                  </el-form-item>
+                  <el-form-item label="Server酱 SendKey（微信推送，国内直连）">
+                    <el-input v-model="cfg.serverchan.sendkey" type="password" show-password />
+                  </el-form-item>
+                  <div class="meta">多个渠道同时填写 = 同时推送，互为备份</div>
+                </el-form>
+              </el-card>
+            </el-col>
+
+            <el-col :xs="24" style="margin-bottom:14px">
+              <el-card shadow="never">
+                <template #header><span class="card-title">🖥️ 面板</span></template>
+                <el-form label-position="top">
+                  <el-row :gutter="14">
+                    <el-col :xs="24" :sm="8">
+                      <el-form-item label="访问密码（留空 = 免密，仅本机访问）">
+                        <el-input v-model="cfg.panel.password" type="password" show-password />
+                      </el-form-item>
+                    </el-col>
+                    <el-col :xs="12" :sm="8">
+                      <el-form-item label="监听地址">
+                        <el-input v-model="cfg.panel.host" placeholder="127.0.0.1" />
+                      </el-form-item>
+                    </el-col>
+                    <el-col :xs="12" :sm="8">
+                      <el-form-item label="端口">
+                        <el-input-number v-model="cfg.panel.port" :min="1" :max="65535" :controls="false"></el-input-number>
+                      </el-form-item>
+                    </el-col>
+                  </el-row>
+                  <div class="meta">监听地址/端口修改后需重启程序生效；对外暴露时务必设置密码。</div>
+                </el-form>
+              </el-card>
+            </el-col>
+          </el-row>
+
+          <div style="display:flex; gap:10px">
+            <el-button type="primary" @click="saveConfig">保存配置</el-button>
+            <el-button @click="loadConfig">放弃修改</el-button>
+          </div>
+          <el-alert v-if="cfgWarn" :title="cfgWarn" type="warning" :closable="false" style="margin-top:12px"></el-alert>
+        </el-tab-pane>
+
+        <!-- 日志 -->
+        <el-tab-pane label="运行日志" name="log" lazy>
+          <pre class="logbox" ref="logbox" @scroll="onLogScroll">{{ logText || '加载中...' }}</pre>
+          <div style="margin-top:12px; display:flex; gap:14px; align-items:center">
+            <el-button size="small" @click="loadLog">刷新日志</el-button>
+            <el-switch v-model="followLog" size="small" />
+            <span class="meta">自动滚动到底部 · 日志页激活时每 5 秒自动刷新；向上翻阅时暂停跟随</span>
+          </div>
+        </el-tab-pane>
+
+      </el-tabs>
+    </el-card>
+  </div>
+</div>
+
+<script src="/static/vendor/vue.global.prod.js"></script>
+<script src="/static/vendor/element-plus.full.min.js"></script>
+<script>
+const { createApp, reactive, ref, nextTick, onMounted } = Vue;
+const { ElMessage, ElMessageBox } = ElementPlus;
+
+const STATUS_CN = {success:'已推送', partial:'部分成功', failed:'失败·待重试', filtered:'未命中关键词', baseline:'基准记录', covered:'已入日报'};
+const STATUS_TYPE = {success:'success', partial:'warning', failed:'danger', filtered:'info', baseline:'success', covered:'success'};
+const CH_CN = {telegram:'Telegram', email:'邮箱', serverchan:'Server酱'};
+
+createApp({
+  setup() {
+    const st = reactive({running: false, last_check: '', last_error: '', stats: {}, intel: {}, health: {}});
+    const records = ref([]);
+    const intel = ref([]);
+    const intelBusy = ref('');
+    const tab = ref('records');
+    const cfg = reactive({
+      twitter: {}, telegram: {}, email: {}, serverchan: {}, panel: {},
+      intel: {enabled: true, search_interval_minutes: 10, digest_time: '09:00'},
+      poll_interval_seconds: 90, proxy: '', monitor_txt: '', keywords_txt: '',
+      intel_queries_txt: '', accounts_txt: ''
+    });
+    const cfgWarn = ref('');
+    const checking = ref(false);
+    const logText = ref('');
+    const logbox = ref(null);
+    const followLog = ref(true);
+
+    function onLogScroll() {
+      const el = logbox.value;
+      if (!el) return;
+      // 距底部 40px 内视为"跟随中"；用户向上翻阅则暂停自动滚动
+      followLog.value = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    }
+
+    async function api(path, opts = {}) {
+      let res = await fetch(path, opts);
+      if (res.status === 401) {
+        const {value} = await ElMessageBox.prompt('请输入面板访问密码', '登录', {inputType: 'password'});
+        const r = await fetch('/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({password: value})});
+        if (!r.ok) throw new Error('密码错误');
+        res = await fetch(path, opts);
+      }
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.detail || res.statusText);
+      }
+      return res.json();
+    }
+
+    async function refreshStatus() {
+      try { Object.assign(st, await api('/api/status')); } catch (e) { /* ignore */ }
+    }
+
+    async function refreshRecords() {
+      try { records.value = await api('/api/records?limit=100&source=monitor'); } catch (e) { /* ignore */ }
+    }
+
+    async function refreshIntel() {
+      try { intel.value = await api('/api/records?limit=200&source=intel'); } catch (e) { /* ignore */ }
+    }
+
+    async function doIntelSearch() {
+      intelBusy.value = 'search';
+      try {
+        const r = await api('/api/intel/search', {method: 'POST'});
+        if (r.note) ElMessage.info(r.note);
+        else r.found > 0 ? ElMessage.success(`搜索完成，新发现 ${r.found} 条，推送 ${r.pushed} 条`)
+                         : ElMessage.info('搜索完成，没有新情报');
+        refreshIntel(); refreshStatus();
+      } catch (e) { ElMessage.error('搜索失败: ' + e.message); }
+      finally { intelBusy.value = ''; }
+    }
+
+    async function doIntelDigest() {
+      intelBusy.value = 'digest';
+      try {
+        const r = await api('/api/intel/digest', {method: 'POST'});
+        r.sent ? ElMessage.success(`日报已发送（${r.items} 条情报），请查收`)
+               : ElMessage.warning('日报推送失败，请检查推送渠道配置');
+        refreshIntel(); refreshStatus();
+      } catch (e) { ElMessage.error('日报失败: ' + e.message); }
+      finally { intelBusy.value = ''; }
+    }
+
+    async function loadConfig() {
+      try {
+        const c = await api('/api/config');
+        cfg.twitter = c.twitter || {}; cfg.telegram = c.telegram || {};
+        cfg.email = c.email || {}; cfg.serverchan = c.serverchan || {}; cfg.panel = c.panel || {};
+        cfg.poll_interval_seconds = c.poll_interval_seconds ?? 90;
+        cfg.proxy = c.proxy || '';
+        cfg.monitor_txt = (c.twitter?.monitor || []).join('\n');
+        cfg.keywords_txt = (c.keywords || []).join('\n');
+        const accs = c.twitter?.accounts || [];
+        let accLines = accs.map(a => [a.auth_token, a.ct0, a.label].filter(v => v).join(':'));
+        if (!accLines.length && c.twitter?.auth_token) {
+          accLines = [[c.twitter.auth_token, c.twitter.ct0].filter(v => v).join(':')];
+        }
+        cfg.accounts_txt = accLines.join('\n');
+        cfg.intel = Object.assign({enabled: true, search_interval_minutes: 10, digest_time: '09:00'}, c.intel || {});
+        cfg.intel_queries_txt = (c.intel?.queries || []).join('\n');
+        cfgWarn.value = '';
+      } catch (e) { ElMessage.error('加载配置失败: ' + e.message); }
+    }
+
+    async function saveConfig() {
+      const c = JSON.parse(JSON.stringify({
+        twitter: cfg.twitter, telegram: cfg.telegram, email: cfg.email,
+        serverchan: cfg.serverchan, panel: cfg.panel,
+        poll_interval_seconds: cfg.poll_interval_seconds, proxy: cfg.proxy,
+        keywords: [], monitor: []
+      }));
+      delete c.monitor; delete c.keywords;
+      c.twitter.monitor = cfg.monitor_txt.split('\n').map(s => s.trim()).filter(Boolean);
+      c.keywords = cfg.keywords_txt.split('\n').map(s => s.trim()).filter(Boolean);
+      const accs = cfg.accounts_txt.split('\n').map(s => s.trim()).filter(Boolean).map(line => {
+        const p = line.split(/[:：,，\t]/).map(s => s.trim()).filter(Boolean);
+        return {auth_token: p[0] || '', ct0: p[1] || '', label: p[2] || ''};
+      }).filter(a => a.auth_token && a.ct0);
+      c.twitter.accounts = accs;
+      if (accs[0]) { c.twitter.auth_token = accs[0].auth_token; c.twitter.ct0 = accs[0].ct0; }
+      c.intel = {
+        enabled: !!cfg.intel.enabled,
+        queries: cfg.intel_queries_txt.split('\n').map(s => s.trim()).filter(Boolean),
+        search_interval_minutes: cfg.intel.search_interval_minutes || 10,
+        digest_time: (cfg.intel.digest_time || '09:00').trim() || '09:00'
+      };
+      try {
+        const r = await api('/api/config', {method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(c)});
+        cfgWarn.value = r.warning || '';
+        r.warning ? ElMessage.warning('已保存，但有问题：' + r.warning) : ElMessage.success('配置已保存，下一轮轮询生效');
+        refreshStatus();
+      } catch (e) { ElMessage.error('保存失败: ' + e.message); }
+    }
+
+    async function loadLog() {
+      try { logText.value = (await api('/api/log?lines=150')).log; }
+      catch (e) { logText.value = '加载失败: ' + e.message; }
+      await nextTick();
+      const el = logbox.value;
+      if (el && followLog.value) el.scrollTop = el.scrollHeight;
+    }
+
+    function onTab(name) {
+      if (name === 'log') loadLog();
+      if (name === 'config') loadConfig();
+      if (name === 'records') refreshRecords();
+      if (name === 'intel') refreshIntel();
+    }
+
+    async function doCheck() {
+      checking.value = true;
+      try {
+        const r = await api('/api/check', {method: 'POST'});
+        r.pushed > 0 ? ElMessage.success(`检查完成，推送 ${r.pushed} 条`)
+                     : ElMessage.info('检查完成，暂无新推文');
+        refreshRecords(); refreshStatus();
+      } catch (e) { ElMessage.error('检查失败: ' + e.message); }
+      finally { checking.value = false; }
+    }
+
+    async function doTest() {
+      try {
+        const r = await api('/api/test', {method: 'POST'});
+        ElMessageBox.alert(
+          Object.entries(r).map(([k, v]) => `${CH_CN[k] || k}：${v}`).join('\n'),
+          '推送渠道测试结果', {confirmButtonText: '知道了'});
+      } catch (e) { ElMessage.error(e.message); }
+    }
+
+    async function toggleMonitor() {
+      try {
+        await api(st.running ? '/api/monitor/stop' : '/api/monitor/start', {method: 'POST'});
+        ElMessage.success(st.running ? '已停止' : '已启动');
+        refreshStatus();
+      } catch (e) { ElMessage.error(e.message); }
+    }
+
+    async function clearRecords() {
+      try {
+        await ElMessageBox.confirm('确定清空全部推送记录？', '提示', {type: 'warning'});
+        await api('/api/records/clear', {method: 'POST'});
+        ElMessage.success('已清空');
+        refreshRecords(); refreshStatus();
+      } catch (e) { /* 取消或失败 */ }
+    }
+
+    const statusCn = s => STATUS_CN[s] || s;
+    const statusType = s => STATUS_TYPE[s] || 'info';
+    const chCn = k => CH_CN[k] || k;
+
+    onMounted(() => {
+      refreshStatus(); refreshRecords(); loadConfig();
+      setInterval(refreshStatus, 10000);
+      setInterval(() => { if (tab.value === 'records') refreshRecords(); }, 30000);
+      setInterval(() => { if (tab.value === 'intel') refreshIntel(); }, 30000);
+      setInterval(() => { if (tab.value === 'log') loadLog(); }, 5000);
+    });
+
+    return {
+      st, records, intel, intelBusy, tab, cfg, cfgWarn, checking, logText, logbox, followLog, onLogScroll,
+      refreshRecords, refreshIntel, doIntelSearch, doIntelDigest,
+      loadConfig, saveConfig, loadLog, onTab,
+      doCheck, doTest, toggleMonitor, clearRecords, statusCn, statusType, chCn
+    };
+  }
+}).use(ElementPlus).mount('#app');
+</script>
+</body>
+</html>

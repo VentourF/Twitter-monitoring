@@ -1,0 +1,19 @@
+services:
+  twitter-monitoring:
+    build: .
+    image: twitter-monitoring:latest
+    container_name: twitter-monitoring
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    environment:
+      # 容器里必须监听 0.0.0.0，宿主机才能访问
+      PANEL_HOST: 0.0.0.0
+      TZ: Asia/Shanghai
+    # 让容器内的 host.docker.internal 指向宿主机（代理软件跑在宿主机上）
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # 代码与数据全部来自项目目录：面板里改配置、推送记录都持久化在这台机器上
+      - ./:/app
+      - /app/.venv

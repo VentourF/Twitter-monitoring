@@ -1,0 +1,19 @@
+# 凭据与运行数据（绝不入库）
+config.json
+cookies.json
+cookies.*.json
+state.json
+records.db
+records.db-wal
+records.db-shm
+monitor.log
+monitor.log.*
+
+# Python / 虚拟环境
+.venv/
+__pycache__/
+*.pyc
+
+# 会话工具产物
+.zcode/
+*.msi

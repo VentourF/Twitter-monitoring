@@ -1,0 +1,48 @@
+{
+  "twitter": {
+    "monitor": [
+      "thsottiaux"
+    ],
+    "accounts": [
+      {"auth_token": "你的auth_token", "ct0": "你的ct0", "label": "小号1"}
+    ],
+    "auth_token": "",
+    "ct0": "",
+    "username": "",
+    "email": "",
+    "password": "",
+    "totp_secret": ""
+  },
+  "telegram": {
+    "bot_token": "",
+    "chat_id": ""
+  },
+  "email": {
+    "smtp_host": "smtp.qq.com",
+    "smtp_port": 465,
+    "username": "",
+    "password": "QQ/163 邮箱填授权码，不是登录密码",
+    "to": "",
+    "from_name": "Twitter monitoring"
+  },
+  "serverchan": {
+    "sendkey": ""
+  },
+  "panel": {
+    "host": "127.0.0.1",
+    "port": 8787,
+    "password": ""
+  },
+  "poll_interval_seconds": 90,
+  "proxy": "http://127.0.0.1:12450",
+  "keywords": [],
+  "intel": {
+    "enabled": true,
+    "queries": [
+      "(\"free model\" OR \"free credits\" OR \"free tokens\" OR \"free tier\") (GPT OR Claude OR Gemini OR LLM OR ChatGPT OR AI) lang:en min_faves:5 -filter:replies -airdrop -crypto -web3 -nft",
+      "(\"限时免费\" OR \"免费额度\" OR \"送token\" OR \"白嫖\") lang:zh min_faves:2 -filter:replies"
+    ],
+    "search_interval_minutes": 10,
+    "digest_time": "09:00"
+  }
+}
