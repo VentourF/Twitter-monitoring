@@ -181,4 +181,24 @@ m.record_push("dele", None, status="success", text="via-delegate",
               tweet_id="D1", url="", source="monitor")
 assert m.tweet_seen("D1")
 
+# 16) 官方账号标签：官方推文带【官方】，与【疑似重置】可叠加，普通推文无标签
+class _ResetTweet:
+    text = "Day 1 reset"
+    created_at = None
+    id = "111"
+
+class _NormalTweet:
+    text = "just saying hi"
+    created_at = None
+    id = "222"
+
+p = m.tweet_parts("someone", _ResetTweet(), official=True)
+assert p["tag"] == m.OFFICIAL_TAG + m.RESET_TAG, p["tag"]
+p = m.tweet_parts("someone", _ResetTweet(), official=False)
+assert p["tag"] == m.RESET_TAG
+p = m.tweet_parts("someone", _NormalTweet(), official=True)
+assert p["tag"] == m.OFFICIAL_TAG
+p = m.tweet_parts("someone", _NormalTweet(), official=False)
+assert p["tag"] == ""
+
 print("ALL CORE TESTS PASSED")

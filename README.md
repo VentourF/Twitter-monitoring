@@ -165,6 +165,7 @@ docker compose down               # 停止
 |---|---|
 | `proxy` | 本机代理地址，默认 `http://127.0.0.1:12450`（本机 12450 端口的代理已验证可用）。访问 x.com 和 api.telegram.org 都必须走它，**开机要先把代理软件跑起来** |
 | `twitter.monitor` | 要监控的用户名列表（不带 @），可以加人 |
+| `twitter.official` | 官方账号列表（如 `Zai_org` / `opencode` / `TencentAI_News`，即 GLM、OpenCode、腾讯 WorkBuddy 的官方公告账号）：这些账号的推文会带【官方】标签，方便一眼识别厂商公告；需同时在 monitor 列表里才会被监控 |
 | `twitter.auth_token` / `ct0` | 推荐的认证方式，浏览器 cookie |
 | `twitter.username/email/password` | 备选：密码登录 |
 | `telegram.bot_token` / `chat_id` | 推送渠道一：Telegram（需要代理） |

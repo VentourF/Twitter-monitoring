@@ -103,6 +103,8 @@ WEEKDAY_CN = "一二三四五六日"
 # “疑似重置”识别：直接说 reset，或 Day N/ 每日系列前缀（实测对 151 条历史零漏报）
 RESET_TAG = "【疑似重置】"
 RESET_PATTERNS = [re.compile(r"\breset\b", re.I), re.compile(r"^\s*day\s*\d", re.I)]
+# 官方账号（twitter.official 列表）：推文打【官方】标签，便于一眼识别厂商公告
+OFFICIAL_TAG = "【官方】"
 
 
 def is_reset_like(text: str) -> bool:
@@ -473,7 +475,7 @@ def convert_time_refs(text: str, created_utc: datetime | None) -> list[str]:
     return results
 
 
-def tweet_parts(handle: str, tweet) -> dict:
+def tweet_parts(handle: str, tweet, official: bool = False) -> dict:
     created, created_dt = "", None
     if tweet.created_at:
         # 形如 'Wed Oct 10 20:19:24 +0000 2018'
@@ -483,12 +485,13 @@ def tweet_parts(handle: str, tweet) -> dict:
         except ValueError:
             created = str(tweet.created_at)
     text = clean_tweet_text(tweet)
+    tag = (OFFICIAL_TAG if official else "") + (RESET_TAG if is_reset_like(text) else "")
     return {
         "handle": handle,
         "text": text,
         "time_conv": convert_time_refs(text, created_dt),
         "media": tweet_media_note(tweet),
-        "tag": RESET_TAG if is_reset_like(text) else "",
+        "tag": tag,
         "created": created,
         "url": f"https://x.com/{handle}/status/{tweet.id}",
     }
@@ -628,8 +631,11 @@ async def translate_text(http: httpx.AsyncClient, text: str) -> str | None:
         return None
 
 
-async def build_parts(handle: str, tweet, http: httpx.AsyncClient, display: str | None = None) -> dict:
-    parts = tweet_parts(handle, tweet)
+async def build_parts(handle: str, tweet, http: httpx.AsyncClient, display: str | None = None,
+                      cfg: dict | None = None) -> dict:
+    official_list = ((cfg or {}).get("twitter") or {}).get("official") or []
+    official = handle.lower() in (h.lower() for h in official_list)
+    parts = tweet_parts(handle, tweet, official=official)
     if display and display != handle:
         parts["display"] = f"{display} (@{handle})"
     else:
@@ -808,7 +814,7 @@ async def poll_once(client: Client, http: httpx.AsyncClient, cfg: dict, state: d
                                 url=f"https://x.com/{handle}/status/{t.id}",
                                 tweet_created=t.created_at or "")
                     continue
-            parts = await build_parts(handle, t, http, display_names.get(handle))
+            parts = await build_parts(handle, t, http, display_names.get(handle), cfg)
             results = await deliver(cfg, http, parts)
             if not any(results.values()):
                 log.warning("[%s] 推文 %s 所有渠道推送失败，保留该推文下轮重试", handle, t.id)

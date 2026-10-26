@@ -148,7 +148,7 @@
             <el-table-column prop="display" label="账号" width="180" show-overflow-tooltip></el-table-column>
             <el-table-column label="内容" min-width="300">
               <template #default="scope">
-                <el-tag v-if="scope.row.tag" type="warning" size="small" effect="plain" style="margin-right:6px">疑似重置</el-tag>
+                <el-tag v-if="scope.row.tag" type="warning" size="small" effect="plain" style="margin-right:6px">{{ scope.row.tag }}</el-tag>
                 <span class="snippet">{{ (scope.row.text || '').slice(0, 90) }}</span>
               </template>
             </el-table-column>
@@ -199,7 +199,7 @@
             <el-table-column prop="display" label="来源" width="180" show-overflow-tooltip></el-table-column>
             <el-table-column label="内容" min-width="300">
               <template #default="scope">
-                <el-tag v-if="scope.row.tag" type="warning" size="small" effect="plain" style="margin-right:6px">免费情报</el-tag>
+                <el-tag v-if="scope.row.tag" type="warning" size="small" effect="plain" style="margin-right:6px">{{ scope.row.tag }}</el-tag>
                 <el-tag v-if="scope.row.status === 'baseline'" type="info" size="small" effect="plain" style="margin-right:6px">基准</el-tag>
                 <span class="snippet">{{ (scope.row.text || '').slice(0, 90) }}</span>
               </template>

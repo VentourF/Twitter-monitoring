@@ -3,6 +3,10 @@
     "monitor": [
       "thsottiaux"
     ],
+    "official": [
+      "Zai_org",
+      "opencode"
+    ],
     "accounts": [
       {"auth_token": "你的auth_token", "ct0": "你的ct0", "label": "小号1"}
     ],
