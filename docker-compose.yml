@@ -5,7 +5,8 @@ services:
     container_name: twitter-monitoring
     restart: unless-stopped
     ports:
-      - "8787:8787"
+      # 只绑宿主机回环地址：仅本机可访问，局域网设备打不开（含账号 cookie 等凭据，别暴露）
+      - "127.0.0.1:8787:8787"
     environment:
       # 容器里必须监听 0.0.0.0，宿主机才能访问
       PANEL_HOST: 0.0.0.0

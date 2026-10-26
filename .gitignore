@@ -17,3 +17,6 @@ __pycache__/
 # 会话工具产物
 .zcode/
 *.msi
+
+# 助手工作目录（记忆、调参脚本）
+.workbuddy-ai/

@@ -113,27 +113,36 @@ def is_reset_like(text: str) -> bool:
 INTEL_TAG = "【免费情报】"
 # X 搜索自带语义扩展（噪音大），所以查询语句管召回、本地 must_match 正则管精确。
 DEFAULT_INTEL_QUERIES = [
-    '("free model" OR "free credits" OR "free tokens" OR "free tier") '
-    '(GPT OR Claude OR Gemini OR LLM OR ChatGPT OR AI) lang:en min_faves:5 '
+    '("free model" OR "free models" OR "free credits" OR "free tokens" OR "free tier" '
+    'OR "free api") (GPT OR Claude OR Gemini OR LLM OR ChatGPT OR AI OR DeepSeek OR Kimi '
+    'OR GLM OR Qwen) lang:en min_faves:5 '
     '-filter:replies -airdrop -crypto -web3 -nft',
-    '("限时免费" OR "免费额度" OR "送token" OR "白嫖") lang:zh min_faves:2 -filter:replies',
+    '("限时免费" OR "免费额度" OR "送token" OR "白嫖" OR "免费API" OR "免费试用") '
+    '(GPT OR Claude OR Gemini OR LLM OR AI OR OpenAI OR DeepSeek OR Kimi OR GLM '
+    'OR 大模型 OR 模型 OR 通义 OR 豆包 OR 智谱) lang:zh min_faves:2 -filter:replies',
 ]
-# 本地精确过滤：命中其一才算情报（不区分大小写）
+# 本地精确过滤：必须**同时**命中「模型相关词」和「免费相关词」才算情报。
+# 光有"白嫖""免费"不算——否则"白嫖实习生""白嫖多邻国和Spotify"这类无关推文全进来。
+# 两个 (?=...) 前瞻分别扫描全文，等价于 AND；(?<![a-z0-9]) 代替 \b，
+# 因为中文算 \w，"白嫖ChatGPT"这种中文紧邻英文时 \b 会失效。
 DEFAULT_INTEL_MATCH = (
-    r"free\s+(models?|credits?|tokens?|tier|trial|access|api|usage|plan|month|year)"
-    r"|\b(models?|credits?|tokens?|api|access|tier)\b[^\n]{0,24}\bfree\b"
-    r"|\bfree\b[^\n]{0,24}\b(models?|credits?|tokens?|api|tier)\b"
-    r"|(?:give|giving)\s+away|for\s+free|100\s*%\s*off|waiv\w+"
-    r"|免费(模型|额度|试用|开放|送|领取?|token|api|用|用户|限制|到)"
-    r"|白嫖|限时免费|限免|羊毛|免费送|送.{0,8}(token|额度|会员|账号)"
-    r"|(?:unlimited|无限|无限制)[^\n]{0,12}(free|免费|额度)"
+    r"^(?=[\s\S]*?(?:(?<![a-z0-9])(?:models?|llms?|ai|gpt[\w.-]*|chatgpt|claude|gemini|grok"
+    r"|llama|mistral|deepseek|qwen|kimi|glm|mimo|sonnet|opus|codex|copilot|cursor|windsurf"
+    r"|cline|opencode|perplexity|midjourney|sora|veo|flux|openai|anthropic|groq|openrouter"
+    r"|cerebras|moonshot|zhipu|minimax)(?![a-z0-9])|大模型|模型|智能体|通义|豆包|千问|文心"
+    r"|智谱|深度求索))"
+    r"(?=[\s\S]*?(?:(?<![a-z0-9])(?:free|trial|giveaway|promo|waiv\w*|100\s*%\s*off)"
+    r"(?![a-z0-9])|免费|白嫖|限时免费|限免|羊毛|额度|试用|送))"
 )
-# 本地排除：成人内容 / 加密货币推销 / 中文垃圾营销等
+# 本地排除：成人内容 / 加密货币推销 / 中文垃圾营销（视频会员、互关涨粉、拉新返利等）
 DEFAULT_INTEL_EXCLUDE = (
     r"onlyfans|nsfw|nudes?|porn|undress|adult video|hookup|escort|sexy"
     r"|airdrop|presale"
     r"|陪聊|陪睡|同城约|约见|车队|晒收益|分成计划|智商税"
     r"|约炮|援交|福利姬|口交|反差|绿帽|绿奴|偷情|贡母|狗链"
+    r"|多邻国|duolingo|spotify|netflix|youtube premium|爱奇艺|腾讯视频|优酷|网易云"
+    r"|互关|互粉|涨粉|引流|兼职|日赚|返利|优惠券|外卖|快递|话费|流量卡|贷款|信用卡"
+    r"|机票|酒店|门票|彩票|博彩|赌"
 )
 
 
