@@ -14,6 +14,7 @@ import asyncio
 import html
 import json
 import logging
+import os
 import re
 import smtplib
 import sqlite3
@@ -105,6 +106,8 @@ RESET_TAG = "【疑似重置】"
 RESET_PATTERNS = [re.compile(r"\breset\b", re.I), re.compile(r"^\s*day\s*\d", re.I)]
 # 官方账号（twitter.official 列表）：推文打【官方】标签，便于一眼识别厂商公告
 OFFICIAL_TAG = "【官方】"
+# 回复推文（twitter.include_replies 开启时）：X 的「原创」时间线不含回复，合并后打标区分
+REPLY_TAG = "【回复】"
 
 
 def is_reset_like(text: str) -> bool:
@@ -262,15 +265,39 @@ def validate_config(cfg: dict) -> list[str]:
 
 
 def load_state() -> dict:
-    if STATE_PATH.exists():
+    if not STATE_PATH.exists():
+        return {}
+    try:
         with open(STATE_PATH, encoding="utf-8") as f:
             return json.load(f)
-    return {}
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError) as e:
+        # 文件损坏（例如写入中途断电/宿主机重启，Windows 绑定挂载上见过整文件变 NUL）：
+        # 备份坏文件后按空状态继续。空状态首轮只建基准不推送，不会误推历史。
+        bad = STATE_PATH.with_name(STATE_PATH.name + ".corrupt")
+        try:
+            os.replace(STATE_PATH, bad)
+            log.warning("state.json 损坏（%r），已备份为 %s，按空状态重建基准", e, bad.name)
+        except OSError:
+            log.warning("state.json 损坏且无法备份（%r），按空状态继续", e)
+        return {}
 
 
 def save_state(state: dict) -> None:
-    with open(STATE_PATH, "w", encoding="utf-8") as f:
+    """原子写：先写临时文件再 os.replace，避免中断时留下半截/NUL 文件。"""
+    tmp = STATE_PATH.with_name(STATE_PATH.name + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
+        f.flush()
+        os.fsync(f.fileno())      # 落盘后再替换，断电也不会拿到空文件
+    # Windows 上目标文件可能被杀软/索引短暂占用，os.replace 偶发 PermissionError，重试几次
+    for i in range(5):
+        try:
+            os.replace(tmp, STATE_PATH)
+            return
+        except PermissionError:
+            if i == 4:
+                raise
+            time.sleep(0.2)
 
 
 def split_message(text: str, limit: int = TELEGRAM_MSG_LIMIT) -> list[str]:
@@ -475,7 +502,7 @@ def convert_time_refs(text: str, created_utc: datetime | None) -> list[str]:
     return results
 
 
-def tweet_parts(handle: str, tweet, official: bool = False) -> dict:
+def tweet_parts(handle: str, tweet, official: bool = False, reply: bool = False) -> dict:
     created, created_dt = "", None
     if tweet.created_at:
         # 形如 'Wed Oct 10 20:19:24 +0000 2018'
@@ -485,7 +512,8 @@ def tweet_parts(handle: str, tweet, official: bool = False) -> dict:
         except ValueError:
             created = str(tweet.created_at)
     text = clean_tweet_text(tweet)
-    tag = (OFFICIAL_TAG if official else "") + (RESET_TAG if is_reset_like(text) else "")
+    tag = (OFFICIAL_TAG if official else "") + (REPLY_TAG if reply else "") \
+        + (RESET_TAG if is_reset_like(text) else "")
     return {
         "handle": handle,
         "text": text,
@@ -632,10 +660,10 @@ async def translate_text(http: httpx.AsyncClient, text: str) -> str | None:
 
 
 async def build_parts(handle: str, tweet, http: httpx.AsyncClient, display: str | None = None,
-                      cfg: dict | None = None) -> dict:
+                      cfg: dict | None = None, reply: bool = False) -> dict:
     official_list = ((cfg or {}).get("twitter") or {}).get("official") or []
     official = handle.lower() in (h.lower() for h in official_list)
-    parts = tweet_parts(handle, tweet, official=official)
+    parts = tweet_parts(handle, tweet, official=official, reply=reply)
     if display and display != handle:
         parts["display"] = f"{display} (@{handle})"
     else:
@@ -777,44 +805,93 @@ async def poll_once(client: Client, http: httpx.AsyncClient, cfg: dict, state: d
             user_id = user.id
             user_ids[handle] = user_id
 
-        tweets = await client.get_user_tweets(user_id, "Tweets")
-        if not tweets:
+        tweets = await client.get_user_tweets(user_id, "Tweets") or []
+        tw_cfg = cfg.get("twitter") or {}
+        # X 的「原创」时间线不含回复。注意 get_user_tweets(..., "Replies") 返回的是
+        # **别人对他的回复（mentions）**，不是他本人的回复，所以这里改用搜索接口补拉，
+        # 再按作者过滤，避免把别人的推文当成本人的推出去。
+        reply_pool: list = []
+        if tw_cfg.get("include_replies"):
+            interval = int(tw_cfg.get("replies_interval_seconds") or 300)
+            checked = state.setdefault("replies_checked", {})
+            if time.time() - float(checked.get(handle) or 0) >= interval:
+                checked[handle] = time.time()
+                try:
+                    found = await client.search_tweet(f"from:{handle}", "Latest") or []
+                except Exception as e:
+                    log.warning("[%s] 补拉回复失败，本轮只处理原创（%r）", handle, e)
+                    found = []
+                reply_pool = [
+                    t for t in found
+                    if (getattr(getattr(t, "user", None), "screen_name", "") or "").lower()
+                    == handle.lower()
+                    and getattr(t, "in_reply_to", None)   # 只要回复，原创走时间线
+                ]
+        if not tweets and not reply_pool:
             log.info("[%s] 本轮没有取到推文", handle)
             continue
 
         last = int(last_seen.get(handle, 0))
         if last == 0:
-            last_seen[handle] = int(tweets[0].id)
-            log.info("[%s] 首次运行，记录基准推文 ID=%s（不推送历史推文）", handle, tweets[0].id)
+            base = tweets[0] if tweets else reply_pool[0]
+            last_seen[handle] = int(base.id)
+            log.info("[%s] 首次运行，记录基准推文 ID=%s（不推送历史推文）", handle, base.id)
             record_push(handle, display_names.get(handle), status="baseline",
-                        text=(tweets[0].text or "")[:500], tweet_id=str(tweets[0].id),
-                        url=f"https://x.com/{handle}/status/{tweets[0].id}",
-                        tweet_created=tweets[0].created_at or "")
+                        text=(base.text or "")[:500], tweet_id=str(base.id),
+                        url=f"https://x.com/{handle}/status/{base.id}",
+                        tweet_created=base.created_at or "")
+            state.setdefault("replies_seen", {})[handle] = max(
+                [int(base.id)] + [int(t.id) for t in reply_pool])
             continue
 
-        fresh = sorted((t for t in tweets if int(t.id) > last), key=lambda t: int(t.id))
+        # 回复单独一条水位线：原创推文会把 last_seen 推高，不能拿它判断回复是否已推
+        rseen_map = state.setdefault("replies_seen", {})
+        rseen = int(rseen_map.get(handle) or 0)
+        if not rseen:
+            # 首次处理该账号的回复：只记水位、不补推历史回复，避免一次性刷屏
+            rseen = max([int(t.id) for t in tweets] + [int(t.id) for t in reply_pool] or [0])
+            rseen_map[handle] = rseen
+            if reply_pool:
+                log.info("[%s] 首次启用回复监控，记录回复基准（不补推历史回复）", handle)
+            reply_pool = []
+
+        fresh_orig = [t for t in tweets if int(t.id) > last]
+        fresh_rep = [t for t in reply_pool if int(t.id) > rseen]
+        fresh = sorted(fresh_orig + fresh_rep, key=lambda t: int(t.id))
         if not fresh:
             continue
+        reply_ids = {int(t.id) for t in fresh_rep}
 
         new_last = last
+        new_rseen = rseen
         for t in fresh:
+            tid = int(t.id)
+            is_reply = tid in reply_ids
             if tweet_seen(t.id):
-                log.info("[%s] 推文 %s 已在情报搜索中推送过，跳过", handle, t.id)
-                new_last = max(new_last, int(t.id))
+                log.info("[%s] 推文 %s 已推送过，跳过", handle, t.id)
+                if is_reply:
+                    new_rseen = max(new_rseen, tid)
+                else:
+                    new_last = max(new_last, tid)
                 continue
-            log.info("[%s] 发现新推文 %s: %s", handle, t.id, (t.text or "")[:60].replace("\n", " "))
+            log.info("[%s] 发现新%s %s: %s", handle, "回复" if is_reply else "推文", t.id,
+                     (t.text or "")[:60].replace("\n", " "))
             if keywords:
                 hit = any(rx.search(t.text or "") for rx in kw_regex) \
                     or any(s in (t.text or "").lower() for s in kw_subs)
                 if not hit:
                     log.info("[%s] 推文 %s 未命中关键词，跳过推送", handle, t.id)
-                    new_last = max(new_last, int(t.id))
+                    if is_reply:
+                        new_rseen = max(new_rseen, tid)
+                    else:
+                        new_last = max(new_last, tid)
                     record_push(handle, display_names.get(handle), status="filtered",
                                 text=(t.text or "")[:500], tweet_id=str(t.id),
                                 url=f"https://x.com/{handle}/status/{t.id}",
                                 tweet_created=t.created_at or "")
                     continue
-            parts = await build_parts(handle, t, http, display_names.get(handle), cfg)
+            parts = await build_parts(handle, t, http, display_names.get(handle), cfg,
+                                      reply=is_reply)
             results = await deliver(cfg, http, parts)
             if not any(results.values()):
                 log.warning("[%s] 推文 %s 所有渠道推送失败，保留该推文下轮重试", handle, t.id)
@@ -832,11 +909,15 @@ async def poll_once(client: Client, http: httpx.AsyncClient, cfg: dict, state: d
                         url=parts["url"], tweet_created=parts["created"],
                         translation=parts.get("translation") or "",
                         time_conv=parts.get("time_conv") or [], results=results)
-            new_last = max(new_last, int(t.id))
+            if is_reply:
+                new_rseen = max(new_rseen, tid)
+            else:
+                new_last = max(new_last, tid)
             pushed += 1
             await asyncio.sleep(1.5)
 
         last_seen[handle] = new_last
+        rseen_map[handle] = new_rseen
         log.info("[%s] 本轮新推文 %d 条，成功推送 %d 条", handle, len(fresh), pushed)
 
     save_state(state)

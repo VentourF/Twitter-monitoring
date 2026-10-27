@@ -7,6 +7,8 @@
       "Zai_org",
       "opencode"
     ],
+    "include_replies": true,
+    "replies_interval_seconds": 300,
     "accounts": [
       {"auth_token": "你的auth_token", "ct0": "你的ct0", "label": "小号1"}
     ],

@@ -201,4 +201,31 @@ assert p["tag"] == m.OFFICIAL_TAG
 p = m.tweet_parts("someone", _NormalTweet(), official=False)
 assert p["tag"] == ""
 
+# 17) 回复标签：回复推文带【回复】，可与【官方】【疑似重置】叠加
+p = m.tweet_parts("someone", _NormalTweet(), reply=True)
+assert p["tag"] == m.REPLY_TAG, p["tag"]
+p = m.tweet_parts("someone", _ResetTweet(), reply=True)
+assert p["tag"] == m.REPLY_TAG + m.RESET_TAG, p["tag"]
+p = m.tweet_parts("someone", _NormalTweet(), official=True, reply=True)
+assert p["tag"] == m.OFFICIAL_TAG + m.REPLY_TAG, p["tag"]
+p = m.tweet_parts("someone", _NormalTweet(), official=False, reply=False)
+assert p["tag"] == ""
+
+# 18) state.json 原子写 + 损坏兜底（临时目录里测，不碰真实 state.json）
+import pathlib
+import tempfile
+
+_orig_state = m.STATE_PATH
+_tmp = pathlib.Path(tempfile.mkdtemp())
+m.STATE_PATH = _tmp / "state.json"
+try:
+    m.save_state({"last_seen": {"x": "1"}})
+    assert m.load_state() == {"last_seen": {"x": "1"}}, "原子写读回不一致"
+    assert not (_tmp / "state.json.tmp").exists(), "临时文件未清理"
+    m.STATE_PATH.write_bytes(b"\x00" * 32)          # 模拟整文件变 NUL
+    assert m.load_state() == {}, "损坏文件未兜底为空状态"
+    assert (_tmp / "state.json.corrupt").exists(), "损坏文件未备份"
+finally:
+    m.STATE_PATH = _orig_state
+
 print("ALL CORE TESTS PASSED")
